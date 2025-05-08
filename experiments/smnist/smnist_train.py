@@ -6,9 +6,7 @@ from datetime import datetime
 import math
 import random
 
-import sys
-sys.path.append("../..")
-import snn
+from brf_snn.models import SimpleResRNN
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
@@ -53,7 +51,7 @@ start_time = datetime.now().strftime("%m-%d_%H-%M-%S")
 # PSMNIST fixed random permutation
 if PERMUTED:
     permuted_idx = torch.randperm(sequence_length)
-    torch.save(permuted_idx, './models/{}'.format(start_time) + '_' + str(rand_num) + '_permuted_idx.pt')
+    torch.save(permuted_idx, 'experiments/smnist/models/{}'.format(start_time) + '_' + str(rand_num) + '_permuted_idx.pt')
 else:
     permuted_idx = torch.arange(sequence_length)
 
@@ -146,7 +144,7 @@ out_adaptive_tau_mem_mean = 20.
 out_adaptive_tau_mem_std = 1. # 5.
 
 
-model = snn.models.SimpleResRNN(
+model = SimpleResRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,
@@ -196,8 +194,8 @@ comment = opt_str + "," + net_str + "," + unit_str
 
 writer = SummaryWriter(comment=comment)
 
-save_path = "models/{}_".format(start_time) + comment + ".pt"
-save_init_path = "models/{}_init_".format(start_time) + comment + ".pt"
+save_path = "experiments/smnist/models/{}_".format(start_time) + comment + ".pt"
+save_init_path = "experiments/smnist/models/{}_init_".format(start_time) + comment + ".pt"
 
 print(start_time, comment)
 

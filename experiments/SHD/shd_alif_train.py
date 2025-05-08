@@ -4,9 +4,8 @@ from torch.utils.data import DataLoader, random_split
 from datetime import datetime
 import math
 import random
-import sys
-sys.path.append("../..")
-import snn
+
+from brf_snn.models import SimpleALIFRNN
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR, StepLR, ExponentialLR, LinearLR
@@ -124,7 +123,7 @@ sub_seq_length = 10
 hidden_bias = True
 output_bias = True
 
-model = snn.models.SimpleALIFRNN(
+model = SimpleALIFRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,

@@ -6,10 +6,8 @@ import random
 from datetime import datetime
 
 import tools
-import sys
-sys.path.append("../..")
-import snn
 
+from brf_snn.models import SimpleResRNN
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -33,7 +31,7 @@ print(device)
 ####################################################################
 
 # TRAIN DATASET #
-preprocessed_train_dataset = scipy.io.loadmat('./data/QTDB_train.mat')
+preprocessed_train_dataset = scipy.io.loadmat('experiments/ecg/data/QTDB_train.mat')
 whole_train_dataset = tools.convert_data_format(preprocessed_train_dataset)
 
 # 618 sequences in whole training dataset
@@ -52,7 +50,7 @@ train_dataset, val_dataset = random_split(
 )
 
 # TEST DATASET #
-preprocessed_test_dataset = scipy.io.loadmat('./data/QTDB_test.mat')
+preprocessed_test_dataset = scipy.io.loadmat('experiments/ecg/data/QTDB_test.mat')
 test_dataset = tools.convert_data_format(preprocessed_test_dataset)
 
 # 141 sequences in test dataset
@@ -123,7 +121,7 @@ out_adaptive_tau_mem_std = 1.
 sub_seq_length = 0
 dt = 0.01
 
-model = snn.models.SimpleResRNN(
+model = SimpleResRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,
@@ -180,8 +178,8 @@ start_time = datetime.now().strftime("%m-%d_%H-%M-%S")
 
 print(start_time, comment)
 
-save_path = "models/{}_".format(start_time) + comment + ".pt"
-save_init_path = "models/{}_init_".format(start_time) + comment + ".pt"
+save_path = "experiments/ecg/models/{}_".format(start_time) + comment + ".pt"
+save_init_path = "experiments/ecg/models/{}_init_".format(start_time) + comment + ".pt"
 
 # save initial parameters for analysis
 torch.save({'model_state_dict': model.state_dict()}, save_init_path)

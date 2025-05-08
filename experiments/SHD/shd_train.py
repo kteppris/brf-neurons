@@ -5,9 +5,8 @@ from datetime import datetime
 import math
 import random
 
-import sys
-sys.path.append("../..")
-import snn
+from brf_snn.models import SimpleResRNN
+
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR, StepLR, ExponentialLR, LinearLR
@@ -127,7 +126,7 @@ sub_seq_length = 0
 hidden_bias = False
 output_bias = False
 
-model = snn.models.SimpleResRNN(
+model = SimpleResRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,

@@ -1,136 +1,185 @@
-########################################################################################################################
-# source code for downloading dataset found at https://compneuro.net/ (Cramer et al., 2020)
-# Authors: Benjamin Cramer & Friedemann Zenke. Licensed under a Creative Commons Attribution 4.0 International License
-# https://creativecommons.org/licenses/by/4.0/ slightly modified
-########################################################################################################################
+from __future__ import annotations
 
+import gzip
+import hashlib
 import os
-import urllib.request
-import gzip, shutil
-from tensorflow.keras.utils import get_file
+import shutil
 import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
+import sys
+import urllib.request as urlreq
+from pathlib import Path
+from typing import Dict, Tuple, Union
 
-cache_dir=os.path.expanduser("./data")
-cache_subdir="hdspikes"
-print("Using cache dir: %s"%cache_dir)
+try:
+    from tensorflow.keras.utils import get_file  # type: ignore
+    _HAS_TF = True
+except ModuleNotFoundError:  # keep the script usable without TF
+    _HAS_TF = False
 
-# The remote directory with the data files
-base_url = "https://compneuro.net/datasets"
-
-# Retrieve MD5 hashes from remote
-response = urllib.request.urlopen("%s/md5sums.txt"%base_url)
-data = response.read()
-lines = data.decode('utf-8').split("\n")
-file_hashes = { line.split()[1]:line.split()[0] for line in lines if len(line.split())==2 }
-
-def get_and_gunzip(origin, filename, md5hash=None):
-    gz_file_path = get_file(filename, origin, md5_hash=md5hash, cache_dir=cache_dir, cache_subdir=cache_subdir)
-    hdf5_file_path=gz_file_path[:-3]
-    if not os.path.isfile(hdf5_file_path) or os.path.getctime(gz_file_path) > os.path.getctime(hdf5_file_path):
-        print("Decompressing %s"%gz_file_path)
-        with gzip.open(gz_file_path, 'r') as f_in, open(hdf5_file_path, 'wb') as f_out:
-            shutil.copyfileobj(f_in, f_out)
-    return hdf5_file_path
-
-# Download the Spiking Heidelberg Digits (SHD) dataset
-files = ["shd_test.h5.gz", "shd_train.h5.gz"]
-
-for fn in files:
-    origin = "%s/%s"%(base_url,fn)
-    hdf5_file_path = get_and_gunzip(origin, fn, md5hash=file_hashes[fn])
-    print(hdf5_file_path)
-
-########################################################################################################################
-# source for preproccessing:
-# https://github.com/byin-cwi/Efficient-spiking-networks/blob/main/SHD/generate_dataset.py (Yin et al., 2021)
-#
-# MIT License
-#
-# Copyright (c) 2021 byin-cwi
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-#
-########################################################################################################################
 import tables
 import numpy as np
 
-files = ['data/hdspikes/shd_test.h5', 'data/hdspikes/shd_train.h5']
+ssl._create_default_https_context = ssl._create_unverified_context
 
-fileh = tables.open_file(files[0], mode='r')
-units = fileh.root.spikes.units
-times = fileh.root.spikes.times
-labels = fileh.root.labels
+# -----------------------------------------------------------------------------#
+# 1.  CONFIGURATION                                                            #
+# -----------------------------------------------------------------------------#
+BASE_URL  = "https://compneuro.net/datasets"
+FILES     = ["shd_test.h5.gz", "shd_train.h5.gz"]
+MD5_LIST  = f"{BASE_URL}/md5sums.txt"
 
-# This is how we access spikes and labels
-index = 0
-print("Times (ms):", times[index], max(times[index]))
-print("Unit IDs:", units[index])
-print("Label:", labels[index])
+# Root directory for data (env var wins; falls back to script/../data)
+DATA_ROOT = Path(os.environ.get("SHD_DATA_ROOT", Path(__file__).resolve().parent / "data"))
+CACHE_DIR = DATA_ROOT / "hdspikes"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# -----------------------------------------------------------------------------#
+# 2.  HELPER FUNCTIONS                                                         #
+# -----------------------------------------------------------------------------#
+def _read_remote_md5s() -> Dict[str, str]:
+    """Return {filename: md5} mapping downloaded from md5sums.txt."""
+    with urlreq.urlopen(MD5_LIST) as resp:
+        text = resp.read().decode("utf-8")
+    pairs = [ln.split()[:2] for ln in text.splitlines() if ln.strip()]
+    return {fname: md5 for md5, fname in pairs}
 
 
-def binary_image_readout(times, units, dt=1e-3):
-    img = []
-    N = int(1 / dt)
-    for i in range(N):
+def _md5(path: Path, chunk: int = 1 << 16) -> str:
+    """MD5 checksum of a local file."""
+    h = hashlib.md5()
+    with path.open("rb") as f:
+        while (blk := f.read(chunk)):
+            h.update(blk)
+    return h.hexdigest()
 
-        # get idx that occur appears in times
-        idxs = np.argwhere(times <= i * dt).flatten()
 
-        # get the channels that were active at the time step i
-        vals = units[idxs]
-        vals = vals[vals > 0]
+def _download(url: str, target: Path) -> None:
+    """Download *url* to *target* (atomic-ish)."""
+    tmp = target.with_suffix(".tmp")
+    with urlreq.urlopen(url) as r, tmp.open("wb") as f:
+        shutil.copyfileobj(r, f)
+    tmp.replace(target)
 
-        # spike for those channels
-        vector = np.zeros(700)
-        vector[700 - vals] = 1
 
+def _get_file(url: str, fname: str, expected_md5: str) -> Path:
+    """Download *fname* to CACHE_DIR, verify MD5, return Path to the .gz file."""
+    target = CACHE_DIR / fname
+    if target.exists() and _md5(target) == expected_md5:
+        return target
+
+    print(f"Downloading {fname} …")
+    if _HAS_TF:
+        tmp = get_file(
+            fname,
+            url,
+            cache_dir=str(CACHE_DIR),   # absolute path – prevents ~/.keras hijack
+            cache_subdir=".",           # we already gave the correct dir
+            md5_hash=expected_md5,
+        )
+        # tf.keras returns the path as str
+        target = Path(tmp)
+    else:
+        _download(url, target)
+        if _md5(target) != expected_md5:
+            raise RuntimeError(f"MD5 mismatch for {target}")
+    return target
+
+
+def _gunzip(src: Path) -> Path:
+    """Return Path to un-gzipped file, inflating if necessary."""
+    dst = src.with_suffix("")  # drop .gz
+    if dst.exists() and dst.stat().st_mtime > src.stat().st_mtime:
+        return dst
+    print(f"Decompressing {src.name} …")
+    with gzip.open(src, "rb") as f_in, dst.open("wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+    return dst
+
+
+# -----------------------------------------------------------------------------#
+# 3.  DOWNLOAD DATA                                                            #
+# -----------------------------------------------------------------------------#
+print(f"[INFO] Using data root: {DATA_ROOT}")
+md5_dict = _read_remote_md5s()
+
+h5_paths = []
+for fn in FILES:
+    gz_path = _get_file(f"{BASE_URL}/{fn}", fn, md5_dict[fn])
+    h5_paths.append(_gunzip(gz_path))
+
+# -----------------------------------------------------------------------------#
+# 4.  PRE-PROCESSING (unchanged public API)                                    #
+# -----------------------------------------------------------------------------#
+def binary_image_readout(times: np.ndarray,
+                         units: np.ndarray,
+                         dt: float = 1e-3,
+                         n_units: int = 700) -> np.ndarray:
+    """
+    Convert a pair of (times, units) arrays into a 2-D binary image.
+
+    Parameters
+    ----------
+    times : array_like
+        Spike times in seconds.
+    units : array_like
+        Unit indices. The original SHD IDs run 1…700.
+    dt : float, optional
+        Temporal bin size in seconds (default 1 ms).
+    n_units : int, optional
+        Number of channels/units (default 700).
+
+    Returns
+    -------
+    np.ndarray
+        Shape (T, n_units) binary matrix.
+    """
+    times = times.copy()
+    units = units.copy()
+    n_steps = int(1 / dt)
+    img = np.zeros((n_steps, n_units), dtype=np.uint8)
+
+    step_edges = np.arange(n_steps) * dt
+    for step in range(n_steps):
+        idxs = np.flatnonzero(times <= step_edges[step])
+        active_units = units[idxs]
+        active_units = active_units[active_units > 0]
+        img[step, n_units - active_units] = 1
         times = np.delete(times, idxs)
         units = np.delete(units, idxs)
-        img.append(vector)
-
-    return np.array(img)
+    return img
 
 
-def generate_dataset(file_name, dt=1e-3):
+def generate_dataset(h5_file: Union[str, Path],
+                     dt: float = 1e-3) -> Tuple[np.ndarray, np.ndarray]:
+    """Return (X, y) numpy arrays for an SHD .h5 file."""
+    h5_file = Path(h5_file)
+    with tables.open_file(h5_file, mode="r") as h5:
+        units_arr = h5.root.spikes.units
+        times_arr = h5.root.spikes.times
+        labels    = h5.root.labels
 
-    fileh = tables.open_file(file_name, mode='r')
-    units = fileh.root.spikes.units
-    times = fileh.root.spikes.times
-    labels = fileh.root.labels
-
-    # This is how we access spikes and labels
-    index = 0
-    print("Number of samples: ", len(times))
-    X = []
-    y = []
-    for i in range(len(times)):
-        tmp = binary_image_readout(times[i], units[i], dt=dt)
-        X.append(tmp)
-        y.append(labels[i])
-    return np.array(X), np.array(y)
+        print(f"[INFO] {h5_file.name}: {len(times_arr)} samples")
+        X = [binary_image_readout(times_arr[i], units_arr[i], dt) for i in range(len(times_arr))]
+        y = labels.read()[:]
+    return np.stack(X, axis=0), y
 
 
-test_X, testy = generate_dataset(files[0], dt=4e-3)
-np.save('./data/testX_4ms.npy', test_X)
-np.save('./data/testY_4ms.npy', testy)
+# -----------------------------------------------------------------------------#
+# 5.  CONVERT AND SAVE NPYS                                                   #
+# -----------------------------------------------------------------------------#
+def _save(split: str, X: np.ndarray, y: np.ndarray, dt_ms: int) -> None:
+    np.save(DATA_ROOT / f"{split}X_{dt_ms}ms.npy", X)
+    np.save(DATA_ROOT / f"{split}Y_{dt_ms}ms.npy", y)
 
-train_X, trainy = generate_dataset(files[1], dt=4e-3)
-np.save('./data/trainX_4ms.npy', train_X)
-np.save('./data/trainY_4ms.npy', trainy)
+
+if __name__ == "__main__":
+    DT = 4e-3                   # seconds
+    dt_ms = int(DT * 1000)
+
+    test_X, test_y   = generate_dataset(h5_paths[0], dt=DT)
+    train_X, train_y = generate_dataset(h5_paths[1], dt=DT)
+
+    _save("test",  test_X,  test_y,  dt_ms)
+    _save("train", train_X, train_y, dt_ms)
+
+    print("[DONE] Saved npy files to:", DATA_ROOT.resolve())

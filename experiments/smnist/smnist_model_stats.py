@@ -1,12 +1,10 @@
 import torch.nn
 import torchvision
 import tools
-from datetime import datetime
-import math
 import os
-import sys
-sys.path.append("../..")
-import snn
+
+from brf_snn.models import SimpleVanillaRFRNN, SimpleResRNN, SimpleALIFRNN
+
 
 ################################################################
 # General settings
@@ -90,7 +88,7 @@ if "vrf" in neuron:
         comment = "Adam(0.1),NLL,LinearLR,LabelLast(True),PERMUTED(False),RFSNN(1,256,10,bs=256,ep=300)," \
                   "RF(abs(omega_uni(15.0,50.0)),no_sust_osc,-abs(b(uni(0.1,1.0)),linearMask(0.0))LI(norm_20.0,5.0)"
 
-    model = snn.models.SimpleVanillaRFRNN(
+    model = SimpleVanillaRFRNN(
         input_size=input_size,
         hidden_size=hidden_size,
         output_size=num_classes,
@@ -113,7 +111,7 @@ elif "brf" in neuron:
                   'RF(abs(omega_uni(15.0,50.0)),sust_osc,abs(b_offset(uni(0.1,1.0))-q,theta(1),linearMask(0.0))' \
                   'LI(norm_20.0,5.0)'
 
-    model = snn.models.SimpleResRNN(
+    model = SimpleResRNN(
         input_size=input_size,
         hidden_size=hidden_size,
         output_size=num_classes,
@@ -134,7 +132,7 @@ else:
         comment = 'Adam(0.001),PERMUTED(False),LinearLR,NLL,LabelLast(True),TBPTT(50),RSNN(1,256,10,bs_256,ep_300,' \
                   'no_bias),ALIF(tau_m(20.0,5.0),tau_a(200.0,50.0),linearMask(0.0))LI(tau_m(20.0,5.0))'
 
-    model = snn.models.SimpleALIFRNN(
+    model = SimpleALIFRNN(
         input_size=input_size,
         hidden_size=hidden_size,
         output_size=num_classes,

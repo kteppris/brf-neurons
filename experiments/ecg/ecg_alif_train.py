@@ -6,13 +6,12 @@ import math
 from datetime import datetime
 
 import tools
-import sys
-sys.path.append("../..")
-import snn
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
 import random
+
+from brf_snn.models import SimpleALIFRNN
 
 ###################################################################
 # General Settings
@@ -124,7 +123,7 @@ sub_seq_length = 10
 hidden_bias = True
 output_bias = True
 
-model = snn.models.SimpleALIFRNN(
+model = SimpleALIFRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,

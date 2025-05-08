@@ -3,9 +3,8 @@ import tools
 from torch.utils.data import DataLoader
 import os
 import scipy
-import sys
-sys.path.append("../..")
-import snn
+
+from brf_snn.models import SimpleVanillaRFRNN, SimpleResRNN, SimpleALIFRNN
 
 ################################################################
 # General settings
@@ -68,7 +67,7 @@ if "vrf" in neuron:
     # vrf (without reset) ecg: test acc. of saved model 85.1 %
     comment = "Adam(0.1),NLL,LinearLR,no_gc,4,36,6,bs=16,ep=400,VRF(omega3.0,5.0,b0.1,1.0,NoR)LI(20.0,1.0)"
 
-    model = snn.models.SimpleVanillaRFRNN(
+    model = SimpleVanillaRFRNN(
         input_size=input_size,
         hidden_size=hidden_size,
         output_size=num_classes,
@@ -85,7 +84,7 @@ elif "brf" in neuron:
     comment = 'Adam(0.1),NLL,LinearLR,no_gc,RFSNN(4,36,6,sub_seq_length=0,bs=16,ep=400),RF(thres(0),' \
               'abs(omega_uni(3.0,5.0)),sust_osc,abs(b_offset(uni(0.1,1.0))-q,theta(1),LinearMask(0.0))LI(20.0,1.0)'
 
-    model = snn.models.SimpleResRNN(
+    model = SimpleResRNN(
         input_size=input_size,
         hidden_size=hidden_size,
         output_size=num_classes,
@@ -102,7 +101,7 @@ else:
     comment = 'Adam(0.05),NLL,LinearLR,no_gc,RSNN(4,36,6,sub_seq_10,bs_64,ep_400,h_o_bias(False)),' \
               'ALIF(tau_m(20.0,0.5),tau_a(7.0,0.2),linearMask_0.0)LI(tau_m(20.0,0.5))'
 
-    model = snn.models.SimpleALIFRNN(
+    model = SimpleALIFRNN(
         input_size=input_size,
         hidden_size=hidden_size,
         output_size=num_classes,
