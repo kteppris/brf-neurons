@@ -1,0 +1,37 @@
+[project]
+name = "brf-snn"
+version = "0.1.0.dev0"
+description = "Python package implementation of Balanced Resonate and Fire Neurons. "
+readme = "README.md"
+authors = [
+    { name = "Saya Higuchi", email = "" },
+    { name = "Keno Teppris", email = "keno.teppris@th-luebeck.de" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "scipy>=1.15.2",
+    "tensorboard>=2.19.0",
+    "torch>=2.7.0",
+    "torchvision>=0.22.0",
+]
+
+[project.scripts]
+brf-snn = "brf_snn:main"
+
+[project.optional-dependencies]
+tables = [
+    "tensorflow>=2.19.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.8",
+]
+
+[tool.ruff]
+select = ["E", "F", "TID252"]   # E/F = pyflakes/pycodestyle
+fix = true
