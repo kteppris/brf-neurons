@@ -5,12 +5,11 @@ import tools
 from datetime import datetime
 import math
 
-import sys
-sys.path.append("../..")
-import snn
 import random
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
+
+from brf_snn.models import SimpleALIFRNNTbptt
 
 ################################################################
 # General settings
@@ -137,7 +136,7 @@ tbptt_steps = 50
 
 criterion = torch.nn.NLLLoss()
 
-model = snn.models.SimpleALIFRNNTbptt(
+model = SimpleALIFRNNTbptt(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,
