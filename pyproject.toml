@@ -19,7 +19,8 @@ dependencies = [
 brf-snn = "brf_snn:main"
 
 [project.optional-dependencies]
-tables = [
+shd = [
+    "tables>=3.10.2",
     "tensorflow>=2.19.0",
 ]
 
